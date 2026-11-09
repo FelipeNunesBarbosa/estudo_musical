@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Estudo Musical MSA · Partituras</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="seek.css">
+  <script src="vendor/fflate.js"></script>
+  <script src="vendor/vexflow.js"></script>
+  <script type="module" src="app.js"></script>
+</head>
+
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand-mark" aria-hidden="true">♫</div>
+      <div class="brand"><strong>ESTUDO MUSICAL MSA</strong><span>Partituras para aulas de solfejo e linguagem
+          rítmica</span></div>
+      <div class="topbar-actions"><span>Acervo local · Live Server</span><button id="fullscreen" type="button">▣
+          <span>Projetar</span></button></div>
+    </header>
+
+    <section class="overview" aria-label="Resumo da aula">
+      <div class="summary-card"><span class="summary-icon">♫</span>
+        <div><small>Partituras no acervo</small><strong id="count">—</strong></div>
+      </div>
+      <div class="summary-card"><span class="summary-icon">▤</span>
+        <div><small>Fase selecionada</small><strong id="phase-summary">—</strong></div>
+      </div>
+      <div class="summary-card"><span class="summary-icon">♩</span>
+        <div><small>Andamento</small><strong id="tempo-summary">— BPM</strong></div>
+      </div>
+      <div class="summary-card"><span class="summary-icon">◉</span>
+        <div><small>Metrônomo</small><strong id="metro-summary">Desligado</strong></div>
+      </div>
+    </section>
+
+    <aside class="sidebar panel" aria-label="Acervo de lições">
+      <div class="section-heading">
+        <div>
+          <h1>Acervo de lições</h1>
+          <p>Pesquise ou escolha uma fase para começar.</p>
+        </div>
+      </div>
+      <input id="search" type="search" placeholder="Buscar lição, exercício ou fase…" aria-label="Buscar lição">
+      <div id="phases" class="phases" aria-label="Filtrar por fase"></div>
+      <label class="import-button">＋ Abrir MSCZ local<input id="local-file" type="file" accept=".mscz" multiple
+          hidden></label>
+      <div class="list-heading">LIÇÕES</div>
+      <div id="lessons" class="lessons"></div>
+    </aside>
+
+    <main id="viewer" class="viewer panel">
+      <div class="lesson-header">
+        <div><span id="breadcrumb"></span>
+          <h2 id="title">Selecione uma lição</h2>
+        </div><a id="download" href="#" download>↓ Baixar MSCZ</a>
+      </div>
+
+      <div class="transport" aria-label="Reprodução da partitura">
+        <div class="transport-buttons"><button id="previous" type="button" title="Lição anterior">←</button><button
+            id="next" type="button" title="Próxima lição">→</button><button id="play" type="button" disabled>▶
+            Reproduzir</button><button id="stop" type="button" disabled>■ Parar</button></div>
+        <div class="transport-position"><label for="measure-select">Começar no compasso</label><input
+            id="measure-select" type="number" min="1" max="1" value="1" aria-label="Compasso para começar"
+            disabled><span id="resume-detail">1 de 1</span></div>
+        <span id="time">0:00</span>
+      </div>
+
+      <div class="audio-controls" aria-label="Andamento e áudio">
+        <div class="control-block bpm-block"><label for="bpm">Andamento</label>
+          <div class="bpm-stepper"><button id="bpm-down" type="button" aria-label="Diminuir BPM">−</button><input
+              id="bpm" type="number" min="30" max="240" step="1" value="90"
+              aria-label="Batidas por minuto"><span>BPM</span><button id="bpm-up" type="button"
+              aria-label="Aumentar BPM">＋</button></div><small><span id="original-tempo">Original: — BPM</span> ·
+            mudança reinicia</small>
+        </div>
+        <div class="control-block metro-block"><span class="control-label">Metrônomo</span><label
+            class="switch-line"><input id="metronome" type="checkbox"><span class="switch-track"
+              aria-hidden="true"></span><span id="metro-label">Desligado</span></label><small>Sincronizado com os
+            compassos</small></div>
+        <div class="control-block timbre-block"><label for="timbre">Som das notas</label><select id="timbre">
+            <option value="voice">Timbre vocal suave</option>
+            <option value="piano">Piano digital</option>
+            <option value="flute">Flauta suave</option>
+            <option value="violin">Violino suave</option>
+          </select><small>Sem instalação adicional</small></div>
+        <div class="control-block volume-block"><label for="music-volume">Volume da partitura <output
+              id="music-value">70%</output></label><input id="music-volume" type="range" min="0" max="100" value="70"
+            aria-label="Volume da partitura"></div>
+        <div class="control-block volume-block"><label for="metro-volume">Volume do metrônomo <output
+              id="metro-value">45%</output></label><input id="metro-volume" type="range" min="0" max="100" value="45"
+            aria-label="Volume do metrônomo"></div>
+      </div>
+
+      <p id="status" role="status">Carregando acervo…</p>
+      <p class="seek-hint">Clique em um compasso ou em uma nota para escolher de onde a reprodução continua.</p>
+      <div id="score" aria-label="Partitura"></div>
+    </main>
+  </div>
+</body>
+
+</html>
