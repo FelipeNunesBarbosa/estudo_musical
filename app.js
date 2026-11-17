@@ -447,6 +447,12 @@ async function init() {
     if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
     else await document.exitFullscreen();
   });
+  $('toggle-settings').addEventListener('click',()=>{
+    const collapsed=$('viewer').classList.toggle('settings-collapsed');
+    $('toggle-settings').setAttribute('aria-expanded',String(!collapsed));
+    $('toggle-settings').textContent=collapsed?'⚙ Mostrar configurações':'⚙ Configurações';
+    $('toggle-settings').title=collapsed?'Expandir configurações':'Recolher configurações';
+  });
   document.addEventListener('fullscreenchange',()=>document.body.classList.toggle('projecting',!!document.fullscreenElement));
   document.addEventListener('fullscreenchange',()=>{
     if (document.fullscreenElement) {
