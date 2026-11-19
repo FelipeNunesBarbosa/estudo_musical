@@ -62,7 +62,8 @@
       <div class="transport" aria-label="Reprodução da partitura">
         <div class="transport-buttons"><button id="previous" type="button" title="Lição anterior">←</button><button
             id="next" type="button" title="Próxima lição">→</button><button id="play" type="button" disabled>▶
-            Reproduzir</button><button id="stop" type="button" disabled>■ Parar</button></div>
+            Reproduzir</button><button id="stop" type="button" disabled>■ Parar</button><button id="exit-fullscreen"
+            class="exit-fullscreen" type="button">⛶ Sair da projeção</button></div>
         <div class="transport-position"><label for="measure-select">Começar no compasso</label><input
             id="measure-select" type="number" min="1" max="1" value="1" aria-label="Compasso para começar"
             disabled><span id="resume-detail">1 de 1</span></div>
@@ -83,8 +84,11 @@
               aria-hidden="true"></span><span id="metro-label">Ligado</span></label><small>Sincronizado com os
             compassos</small></div>
         <div class="control-block playhead-block"><span class="control-label">Barra de acompanhamento</span><label
-            class="switch-line"><input id="playhead" type="checkbox" checked><span class="switch-track"
-              aria-hidden="true"></span><span id="playhead-label">Ligada</span></label><small>Segue a partitura durante a reprodução</small></div>
+            class="switch-line"><input id="playhead" type="checkbox"><span class="switch-track"
+              aria-hidden="true"></span><span id="playhead-label">Desligada</span></label><small>Segue a partitura durante a reprodução</small></div>
+        <div class="control-block highlight-block"><span class="control-label">Destaque das notas</span><label
+            class="switch-line"><input id="note-highlight" type="checkbox" checked><span class="switch-track"
+              aria-hidden="true"></span><span id="note-highlight-label">Ligado</span></label><small>Realça notas e pausas atuais</small></div>
         <div class="control-block timbre-block"><label for="timbre">Som das notas</label><select id="timbre">
             <option value="piano" selected>Piano digital</option>
             <option value="flute">Flauta suave</option>

@@ -13,7 +13,7 @@ let lessons = [], visible = [], selected = null, phase = 0, parsed = null;
 let audioContext, musicBus, metronomeBus, snareBuffer, masterBus;
 let oscillators = [], timers = [], highlights = [], playing = false, originalBpm = 90;
 let timbre = 'piano';
-let cue = {measure:0,offset:0,note:false}, noteHits = [], measureBoxes = [], cueLine = null, playheadLine = null;
+let cue = {measure:0,offset:0,note:false}, noteHits = [], measureBoxes = [], cueLine = null, playheadLine = null, activeVisuals = [];
 
 function noteKey(midi) { return `${pitchNames[midi % 12]}/${Math.floor(midi / 12) - 1}`; }
 function writtenNote(note) {
@@ -49,9 +49,11 @@ function readScore(bytes) {
       const voices = children(measure, 'voice').map(voice => {
         const events = [];
         events.tuplets = [];
+        events.breaths = [];
         let activeTuplet = null;
         let voiceOffset = 0;
         for (const item of voice.children) {
+        if (item.tagName === 'Breath' || item.tagName === 'BreathMark') { events.breaths.push(voiceOffset); continue; }
         if (item.tagName === 'Tuplet') {
           activeTuplet = {normal:Number(value(item,'normalNotes')) || 2,actual:Number(value(item,'actualNotes')) || 3,indices:[]};
           events.tuplets.push(activeTuplet);
@@ -81,11 +83,32 @@ function readScore(bytes) {
       return { voices, events:voices[0] || [], time:[...time], key, tempo, clef, percussion, lines };
     });
   });
+  // No Hino 190, o arquivo original traz uma marca de respiração que cria
+  // uma medida intermediária visualmente isolada. Reunimos essa nota ao
+  // compasso anterior, como aparece na partitura impressa.
+  if (/hino\s*190/i.test(`${title} ${selected?.title||''}`)) {
+    for (const staff of staves) {
+      const previous=staff[2], separated=staff[3];
+      if (!previous || !separated) continue;
+      const count=Math.max(previous.voices.length,separated.voices.length);
+      for (let voiceIndex=0;voiceIndex<count;voiceIndex++) {
+        const left=previous.voices[voiceIndex]||[];
+        const right=separated.voices[voiceIndex]||[];
+        let cursor=left.reduce((sum,event)=>sum+event.length,0);
+        right.forEach(event=>{event.offset=cursor;cursor+=event.length;});
+        left.push(...right);
+        previous.voices[voiceIndex]=left;
+      }
+      previous.events=previous.voices[0]||[];
+      staff.splice(3,1);
+    }
+  }
   return { title, staves, measures:Math.max(...staves.map(staff => staff.length)) };
 }
 
 function draw(data) {
-  const host = $('score'); host.replaceChildren(); highlights = []; noteHits = []; measureBoxes = []; cueLine = null; playheadLine = null;
+  const host = $('score'); host.replaceChildren(); highlights = []; noteHits = []; measureBoxes = []; cueLine = null; playheadLine = null; activeVisuals = [];
+  const hymn=/hino/i.test(`${data.title||''} ${selected?.title||''}`);
   const width = Math.max(240, host.clientWidth - 16);
   const perRow = Math.max(1, Math.min(6, Math.floor(width / 300)));
   const cellWidth = Math.floor((width - 20) / perRow);
@@ -102,8 +125,9 @@ function draw(data) {
       if (!measure) continue;
       const y = top + staffIndex*100;
       const stave = new VF.Stave(x,y,cellWidth);
+      const renderClef=hymn&&staffIndex>0&&!measure.percussion?'bass':measure.clef;
       if (measure.percussion) stave.setNumLines(measure.lines);
-      if (col === 0) stave.addClef(measure.clef);
+      if (col === 0) stave.addClef(renderClef);
       if (index === 0 || measure.time.join('/') !== data.staves[staffIndex][index-1]?.time.join('/')) stave.addTimeSignature(measure.time.join('/'));
       if (col === 0 && measure.key !== 'C') stave.addKeySignature(measure.key);
       stave.setContext(context).draw();
@@ -111,7 +135,7 @@ function draw(data) {
         const notes = events.map(event => {
           const keys = event.rest ? ['b/4'] : measure.percussion ? ['b/4'] : event.notes.map(writtenNote);
           if (!keys.length) return null;
-          const note = new VF.StaveNote({clef:measure.clef,keys,duration:event.code+(event.rest?'r':'')});
+          const note = new VF.StaveNote({clef:renderClef,keys,duration:event.code+(event.rest?'r':'')});
           for (let dot=0;dot<event.dots;dot++) note.addModifier(new VF.Dot(),0);
           if (!event.rest && measure.voices.length > 1) note.setStemDirection(voiceIndex % 2 ? -1 : 1);
           else if (!event.rest && event.stem) note.setStemDirection(event.stem === 'down' ? -1 : 1);
@@ -125,7 +149,7 @@ function draw(data) {
           const members=group.indices.map(index=>notes[index]).filter(Boolean);
           return members.length > 1 ? new VF.Tuplet(members,{num_notes:group.actual,notes_occupied:group.normal}) : null;
         }).filter(Boolean);
-        return {voice,notes,events,beams:VF.Beam.generateBeams(notes),tuplets};
+        return {voice,notes,events,beams:hymn?[]:VF.Beam.generateBeams(notes),tuplets};
       }).filter(Boolean);
       if (voiceData.length) {
         const voices = voiceData.map(item => item.voice);
@@ -136,6 +160,15 @@ function draw(data) {
           item.tuplets.forEach(tuplet => tuplet.setContext(context).draw());
           item.notes.forEach((note,noteIndex) => {
             const event=item.events[noteIndex];
+            const bounds=note.getBoundingBox?.();
+            if (bounds) {
+              const visual=document.createElementNS('http://www.w3.org/2000/svg','rect');
+              visual.setAttribute('x',bounds.getX()-5); visual.setAttribute('y',bounds.getY()-7);
+              visual.setAttribute('width',Math.max(16,bounds.getW()+10)); visual.setAttribute('height',Math.max(24,bounds.getH()+14));
+              visual.setAttribute('rx','5'); visual.setAttribute('class','event-highlight'); visual.setAttribute('fill','transparent'); visual.setAttribute('pointer-events','none');
+              host.querySelector('svg')?.append(visual);
+              activeVisuals.push({measure:index,offset:event.offset,end:event.offset+event.length,visual});
+            }
             if (event?.pitches.length) noteHits.push({measure:index,offset:event.offset,x:note.getAbsoluteX(),y:y-20});
           });
           symbols += item.notes.length;
@@ -217,6 +250,11 @@ function movePlayhead(measure,offset=0,measureLength=0) {
   playheadLine.setAttribute('visibility','visible');
 }
 
+function activateVisuals(measure,offset) {
+  const enabled=$('note-highlight')?.checked;
+  activeVisuals.forEach(item=>item.visual.classList.toggle('active-symbol',enabled&&item.measure===measure&&item.offset<=offset+1e-5&&item.end>offset+1e-5));
+}
+
 function selectCue(measure,offset=0,note=false) {
   if (!parsed) return;
   const resume=playing;
@@ -231,6 +269,7 @@ function stop() {
   oscillators.forEach(osc => { try { osc.stop(); } catch {} }); oscillators=[];
   playing=false; $('play').textContent='▶ Reproduzir'; $('time').textContent='0:00';
   if (playheadLine) playheadLine.setAttribute('visibility','hidden');
+  activeVisuals.forEach(item=>item.visual.classList.remove('active-symbol'));
   renderCue();
 }
 
@@ -377,7 +416,7 @@ function play() {
           const eventEnd=cursor+event.length;
           if (eventEnd>startOffset+1e-6) {
             const visibleStart=Math.max(cursor,startOffset);
-            timers.push(setTimeout(()=>movePlayhead(index,visibleStart,measureLength),(start+(visibleStart-startOffset)*quarterSeconds+leadTime)*1000));
+            timers.push(setTimeout(()=>{movePlayhead(index,visibleStart,measureLength);activateVisuals(index,visibleStart);},(start+(visibleStart-startOffset)*quarterSeconds+leadTime)*1000));
           }
           if (eventEnd>startOffset+1e-6) {
             const audibleStart=Math.max(cursor,startOffset);
@@ -495,6 +534,9 @@ async function init() {
     if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
     else await document.exitFullscreen();
   });
+  $('exit-fullscreen').addEventListener('click',async()=>{
+    if (document.fullscreenElement) await document.exitFullscreen();
+  });
   $('toggle-settings').addEventListener('click',()=>{
     const collapsed=$('viewer').classList.toggle('settings-collapsed');
     $('toggle-settings').setAttribute('aria-expanded',String(!collapsed));
@@ -506,6 +548,9 @@ async function init() {
     $('playhead-label').textContent=active?'Ligada':'Desligada';
     if (active && parsed) movePlayhead(cue.measure,cue.offset);
     else if (playheadLine) playheadLine.setAttribute('visibility','hidden');
+  });
+  $('note-highlight').addEventListener('change',()=>{
+    if (!$('note-highlight').checked) activeVisuals.forEach(item=>item.visual.classList.remove('active-symbol'));
   });
   document.addEventListener('fullscreenchange',()=>document.body.classList.toggle('projecting',!!document.fullscreenElement));
   document.addEventListener('fullscreenchange',()=>{

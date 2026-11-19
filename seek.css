@@ -4,4 +4,8 @@
 .viewer.settings-collapsed .audio-controls,.viewer.settings-collapsed .seek-hint{display:none}.viewer.settings-collapsed #score{min-height:calc(100vh - 120px)}
 body.projecting .viewer.settings-collapsed #score{height:calc(100vh - 62px)}
 .playhead-line{pointer-events:none;stroke:#1d649a;stroke-width:3;filter:drop-shadow(0 0 4px #1d649a66)}
+.event-highlight{fill:transparent;stroke:none;opacity:0;transition:opacity .08s,fill .08s}.event-highlight.active-symbol{fill:#2b699f;opacity:.32}
+.breath-mark{font:700 20px Georgia,serif;fill:#173655;pointer-events:none}
+.exit-fullscreen{display:none}
+body.projecting .exit-fullscreen{display:inline-flex}
 @media(max-width:560px){#toggle-settings{font-size:12px;padding:8px 10px}.viewer.settings-collapsed #score{min-height:calc(100vh - 105px)}}
