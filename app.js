@@ -10,10 +10,10 @@ const spellings = [{name:'c',tpc:14,semitone:0},{name:'d',tpc:16,semitone:2},{na
 const accidentals = {accidentalSharp:'#',accidentalFlat:'b',accidentalNatural:'n',accidentalDoubleSharp:'##',accidentalDoubleFlat:'bb'};
 const keyNames = { '-7':'Cb','-6':'Gb','-5':'Db','-4':'Ab','-3':'Eb','-2':'Bb','-1':'F',0:'C',1:'G',2:'D',3:'A',4:'E',5:'B',6:'F#',7:'C#' };
 let lessons = [], visible = [], selected = null, phase = 0, parsed = null;
-let audioContext, musicBus, metronomeBus, snareBuffer;
+let audioContext, musicBus, metronomeBus, snareBuffer, masterBus;
 let oscillators = [], timers = [], highlights = [], playing = false, originalBpm = 90;
-let timbre = 'voice';
-let cue = {measure:0,offset:0,note:false}, noteHits = [], measureBoxes = [], cueLine = null;
+let timbre = 'piano';
+let cue = {measure:0,offset:0,note:false}, noteHits = [], measureBoxes = [], cueLine = null, playheadLine = null;
 
 function noteKey(midi) { return `${pitchNames[midi % 12]}/${Math.floor(midi / 12) - 1}`; }
 function writtenNote(note) {
@@ -85,7 +85,7 @@ function readScore(bytes) {
 }
 
 function draw(data) {
-  const host = $('score'); host.replaceChildren(); highlights = []; noteHits = []; measureBoxes = []; cueLine = null;
+  const host = $('score'); host.replaceChildren(); highlights = []; noteHits = []; measureBoxes = []; cueLine = null; playheadLine = null;
   const width = Math.max(240, host.clientWidth - 16);
   const perRow = Math.max(1, Math.min(6, Math.floor(width / 300)));
   const cellWidth = Math.floor((width - 20) / perRow);
@@ -111,7 +111,8 @@ function draw(data) {
         const notes = events.map(event => {
           const keys = event.rest ? ['b/4'] : measure.percussion ? ['b/4'] : event.notes.map(writtenNote);
           if (!keys.length) return null;
-          const note = new VF.StaveNote({clef:measure.clef,keys,duration:event.code+(event.rest?'r':'')+'d'.repeat(event.dots)});
+          const note = new VF.StaveNote({clef:measure.clef,keys,duration:event.code+(event.rest?'r':'')});
+          for (let dot=0;dot<event.dots;dot++) note.addModifier(new VF.Dot(),0);
           if (!event.rest && measure.voices.length > 1) note.setStemDirection(voiceIndex % 2 ? -1 : 1);
           else if (!event.rest && event.stem) note.setStemDirection(event.stem === 'down' ? -1 : 1);
           if (!event.rest && !measure.percussion) event.notes.forEach((source,i) => { if (source.accidental) note.addModifier(new VF.Accidental(source.accidental),i); });
@@ -180,6 +181,9 @@ function draw(data) {
   cueLine=document.createElementNS('http://www.w3.org/2000/svg','line');
   cueLine.setAttribute('class','seek-line'); cueLine.setAttribute('visibility','hidden');
   svg.append(cueLine);
+  playheadLine=document.createElementNS('http://www.w3.org/2000/svg','line');
+  playheadLine.setAttribute('class','playhead-line'); playheadLine.setAttribute('visibility','hidden');
+  svg.append(playheadLine);
   return symbols;
 }
 
@@ -197,6 +201,20 @@ function renderCue() {
       cueLine.setAttribute('y1',box.y); cueLine.setAttribute('y2',box.y+box.height);
     }
   }
+  if (playheadLine && !$('playhead').checked) playheadLine.setAttribute('visibility','hidden');
+}
+
+function movePlayhead(measure,offset=0,measureLength=0) {
+  if (!playheadLine || !$('playhead').checked) return;
+  const box=measureBoxes[measure]; if (!box) return;
+  // Mantém a barra sempre na camada superior do SVG, acima de notas e pautas.
+  playheadLine.parentNode?.appendChild(playheadLine);
+  const hit=noteHits.find(item=>item.measure===measure&&item.offset>=offset-1e-5);
+  const ratio=measureLength>0?Math.max(0,Math.min(1,offset/measureLength)):0;
+  const x=measureLength>0?box.x+box.width*ratio:(hit?.x ?? box.x+box.width);
+  playheadLine.setAttribute('x1',x); playheadLine.setAttribute('x2',x);
+  playheadLine.setAttribute('y1',box.y); playheadLine.setAttribute('y2',box.y+box.height);
+  playheadLine.setAttribute('visibility','visible');
 }
 
 function selectCue(measure,offset=0,note=false) {
@@ -212,14 +230,21 @@ function stop() {
   timers.forEach(clearTimeout); timers=[];
   oscillators.forEach(osc => { try { osc.stop(); } catch {} }); oscillators=[];
   playing=false; $('play').textContent='▶ Reproduzir'; $('time').textContent='0:00';
+  if (playheadLine) playheadLine.setAttribute('visibility','hidden');
   renderCue();
 }
 
 function ensureAudio() {
   audioContext ||= new AudioContext();
   if (!musicBus) {
-    musicBus=audioContext.createGain(); musicBus.connect(audioContext.destination);
-    metronomeBus=audioContext.createGain(); metronomeBus.connect(audioContext.destination);
+    masterBus=audioContext.createGain();
+    const compressor=audioContext.createDynamicsCompressor();
+    compressor.threshold.value=-18; compressor.knee.value=12; compressor.ratio.value=4;
+    compressor.attack.value=.003; compressor.release.value=.18;
+    masterBus.gain.value=1.55;
+    masterBus.connect(compressor).connect(audioContext.destination);
+    musicBus=audioContext.createGain(); musicBus.connect(masterBus);
+    metronomeBus=audioContext.createGain(); metronomeBus.connect(masterBus);
     const count=Math.ceil(audioContext.sampleRate*.14);
     snareBuffer=audioContext.createBuffer(1,count,audioContext.sampleRate);
     const samples=snareBuffer.getChannelData(0);
@@ -261,7 +286,7 @@ function scheduleNote(pitch,at,duration,percussion,chordSize) {
     const filter=audioContext.createBiquadFilter();
     osc.type='triangle'; osc.frequency.value=220;
     filter.type='lowpass'; filter.frequency.value=1400; filter.Q.value=.4;
-    const level=.08/Math.max(1,chordSize);
+    const level=.16/Math.max(1,chordSize);
     const attack=Math.min(.035,Math.max(.01,durationSeconds*.1));
     const release=Math.min(.12,Math.max(.05,durationSeconds*.2));
     gain.gain.setValueAtTime(0,at);
@@ -280,7 +305,7 @@ function scheduleNote(pitch,at,duration,percussion,chordSize) {
     osc.frequency.value=frequency; harmony.frequency.value=frequency*2;
     const filter=audioContext.createBiquadFilter();
     filter.type='lowpass'; filter.frequency.value=timbre==='flute'?3600:timbre==='piano'?3200:timbre==='violin'?2200:1500; filter.Q.value=timbre==='voice'?1.1:.3;
-    const sustain=.075/Math.max(1,chordSize);
+    const sustain=.14/Math.max(1,chordSize);
     const attack=Math.min(.06,Math.max(.018,durationSeconds*.08));
     const release=Math.min(.18,Math.max(.08,durationSeconds*.16));
     const releaseStart=Math.max(attack,durationSeconds-release);
@@ -300,7 +325,7 @@ function scheduleNote(pitch,at,duration,percussion,chordSize) {
 function scheduleClick(at,accent) {
   const osc=audioContext.createOscillator(),gain=audioContext.createGain();
   osc.type='sine'; osc.frequency.value=accent?1320:880;
-  gain.gain.setValueAtTime(accent?.14:.085,at);
+  gain.gain.setValueAtTime(accent?.22:.14,at);
   gain.gain.exponentialRampToValueAtTime(.001,at+.055);
   osc.connect(gain).connect(metronomeBus); osc.start(at); osc.stop(at+.06);
   oscillators.push(osc);
@@ -330,7 +355,18 @@ function play() {
     timers.push(setTimeout(() => {
       highlights.forEach(rect => rect.setAttribute('fill','transparent'));
       highlights[index]?.setAttribute('fill','#f7d5d5');
-      highlights[index]?.scrollIntoView({block:'nearest',behavior:'smooth'});
+      const activeMeasure=highlights[index];
+      if (activeMeasure) {
+        activeMeasure.scrollIntoView({block:'center',inline:'nearest',behavior:'smooth'});
+        const score=$('score');
+        if (score) {
+          const rect=activeMeasure.getBoundingClientRect();
+          const scoreRect=score.getBoundingClientRect();
+          if (rect.top<scoreRect.top+24 || rect.bottom>scoreRect.bottom-24) {
+            score.scrollTo({top:score.scrollTop+(rect.top+rect.height/2)-(scoreRect.top+scoreRect.height/2),behavior:'smooth'});
+          }
+        }
+      }
       $('time').textContent=`${Math.floor(start/60)}:${String(Math.floor(start%60)).padStart(2,'0')}`;
     },(start+leadTime)*1000));
     for (const staff of parsed.staves) {
@@ -339,6 +375,10 @@ function play() {
         let cursor=0;
         for (const event of events) {
           const eventEnd=cursor+event.length;
+          if (eventEnd>startOffset+1e-6) {
+            const visibleStart=Math.max(cursor,startOffset);
+            timers.push(setTimeout(()=>movePlayhead(index,visibleStart,measureLength),(start+(visibleStart-startOffset)*quarterSeconds+leadTime)*1000));
+          }
           if (eventEnd>startOffset+1e-6) {
             const audibleStart=Math.max(cursor,startOffset);
             const duration=(eventEnd-audibleStart)*quarterSeconds;
@@ -358,6 +398,14 @@ function play() {
 function renderList() {
   const term=$('search').value.trim().toLocaleLowerCase('pt-BR');
   visible=lessons.filter(item => (!phase || item.phase===phase) && (!term || `${item.title} ${item.phase}`.toLocaleLowerCase('pt-BR').includes(term)));
+  const orderKey=item=>{
+    const title=item.title||'';
+    const phaseMatch=title.match(/(?:fase\s*)?(\d+(?:\.\d+)?)/i);
+    const exerciseMatch=title.match(/exerc[ií]cio\s*(\d+)/i);
+    const pageMatch=title.match(/p[áa]g\.?\s*(\d+)/i);
+    return [phaseMatch?Number(phaseMatch[1]):(item.phase||999),exerciseMatch?Number(exerciseMatch[1]):999,pageMatch?Number(pageMatch[1]):999,title];
+  };
+  visible.sort((a,b)=>{const ak=orderKey(a),bk=orderKey(b);for(let i=0;i<3;i++)if(ak[i]!==bk[i])return ak[i]-bk[i];return ak[3].localeCompare(bk[3],'pt-BR');});
   $('lessons').replaceChildren();
   for (const item of visible) {
     const button=document.createElement('button'); button.type='button'; button.textContent=item.title;
@@ -452,6 +500,12 @@ async function init() {
     $('toggle-settings').setAttribute('aria-expanded',String(!collapsed));
     $('toggle-settings').textContent=collapsed?'⚙ Mostrar configurações':'⚙ Configurações';
     $('toggle-settings').title=collapsed?'Expandir configurações':'Recolher configurações';
+  });
+  $('playhead').addEventListener('change',()=>{
+    const active=$('playhead').checked;
+    $('playhead-label').textContent=active?'Ligada':'Desligada';
+    if (active && parsed) movePlayhead(cue.measure,cue.offset);
+    else if (playheadLine) playheadLine.setAttribute('visibility','hidden');
   });
   document.addEventListener('fullscreenchange',()=>document.body.classList.toggle('projecting',!!document.fullscreenElement));
   document.addEventListener('fullscreenchange',()=>{

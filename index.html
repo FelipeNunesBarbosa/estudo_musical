@@ -79,12 +79,14 @@
             mudança reinicia</small>
         </div>
         <div class="control-block metro-block"><span class="control-label">Metrônomo</span><label
-            class="switch-line"><input id="metronome" type="checkbox"><span class="switch-track"
-              aria-hidden="true"></span><span id="metro-label">Desligado</span></label><small>Sincronizado com os
+            class="switch-line"><input id="metronome" type="checkbox" checked><span class="switch-track"
+              aria-hidden="true"></span><span id="metro-label">Ligado</span></label><small>Sincronizado com os
             compassos</small></div>
+        <div class="control-block playhead-block"><span class="control-label">Barra de acompanhamento</span><label
+            class="switch-line"><input id="playhead" type="checkbox" checked><span class="switch-track"
+              aria-hidden="true"></span><span id="playhead-label">Ligada</span></label><small>Segue a partitura durante a reprodução</small></div>
         <div class="control-block timbre-block"><label for="timbre">Som das notas</label><select id="timbre">
-            <option value="voice">Timbre vocal suave</option>
-            <option value="piano">Piano digital</option>
+            <option value="piano" selected>Piano digital</option>
             <option value="flute">Flauta suave</option>
             <option value="violin">Violino suave</option>
           </select><small>Sem instalação adicional</small></div>

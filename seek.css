@@ -3,4 +3,5 @@
 .timbre-block select{width:100%;padding:8px 10px;border:1px solid #cbdbea;border-radius:7px;background:#fff;color:#173655;font:inherit}
 .viewer.settings-collapsed .audio-controls,.viewer.settings-collapsed .seek-hint{display:none}.viewer.settings-collapsed #score{min-height:calc(100vh - 120px)}
 body.projecting .viewer.settings-collapsed #score{height:calc(100vh - 62px)}
+.playhead-line{pointer-events:none;stroke:#1d649a;stroke-width:3;filter:drop-shadow(0 0 4px #1d649a66)}
 @media(max-width:560px){#toggle-settings{font-size:12px;padding:8px 10px}.viewer.settings-collapsed #score{min-height:calc(100vh - 105px)}}
